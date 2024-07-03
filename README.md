@@ -19,10 +19,10 @@ docker run --name oracledb -d -p 1521:1521 -e ORACLE_PASSWORD=<MY PASSWORD> gven
 docker exec -it oracledb bash
 ```
 
-3. Start SQLPlus as `sysdba`.
+3. Start SQLPlus as `sysdba`, using the ORACLE_PASSWORD value specified when the container was started to login.
 
 ```shell
-sqlplus / as sysdba
+sqlplus sys/<MY PASSWORD>@freepdb1 as sysdba
 ```
 
 4. Run the queries in `src/test/resources/okafka.sql` to configure the database for the Kafka tests.
