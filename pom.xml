@@ -4,10 +4,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>oracle-database-similarity-search-example</artifactId>
-    <groupId>com.github.andersswanson</groupId>
-    <name>Sample :: Oracle Database Similarity Search</name>
-    <description>Oracle JDBC Implementation</description>
+    <artifactId>oracle-database-kafka-apis</artifactId>
+    <groupId>com.example</groupId>
+    <name>Sample :: Oracle Kafka APIs</name>
+    <description>Oracle Kafka API Example</description>
     <version>1.0.0</version>
 
     <properties>
