@@ -1,5 +1,9 @@
-create user TESTUSER identified by Welcome123#;
+alter session set container=freepdb1;
 
+-- In our exampel, this user is created by Testcontainers
+-- create user TESTUSER identified by Welcome123#;
+
+-- You may wish to modify the unlimited tablespace grant as appropriate.
 grant resource, connect, unlimited tablespace to TESTUSER;
 grant aq_user_role to TESTUSER;
 grant execute on dbms_aq to  TESTUSER;
