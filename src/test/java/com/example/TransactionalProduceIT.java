@@ -72,7 +72,15 @@ public class TransactionalProduceIT {
         // since we are testing locally with a containerized database.
         NewTopic topic = new NewTopic(topicName, 1, (short) 0);
         AdminUtil.createTopicIfNotExists(getOKafkaConnectionProperties(), topic);
+        // The producer will fail, and rollback the transaction.
+        // No records will be written.
+        doTransactionalProduce(15, false);
+        // The producer will write 50 records, and commit the transaction.
+        // The records table will be populated.
+        doTransactionalProduce(51, true);
+    }
 
+    private void doTransactionalProduce(int limit, boolean isCommitted) throws Exception {
         // Create the KafkaProducer with Oracle Database connectivity information.
         Properties producerProps = getOKafkaConnectionProperties();
         producerProps.put("enable.idempotence", "true");
@@ -83,16 +91,16 @@ public class TransactionalProduceIT {
         producerProps.put("oracle.transactional.producer", "true");
         KafkaProducer<String, String> okafkaProducer = new KafkaProducer<>(producerProps);
 
+        System.out.printf("#### Starting TransactionalProducer (isCommitted=%B) ####%n", isCommitted);
+
         // The producer will process 15 records before failing,
         // aborting the transaction.
         try (TransationalProducer producer = new TransationalProducer(
                 okafkaProducer,
                 topicName,
-                15)) {
+                limit)) {
             producer.produce(getDataStream());
         }
-
-        System.out.println("#### TransactionalProducer completed ####");
 
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
@@ -100,8 +108,9 @@ public class TransactionalProduceIT {
                         select * from records
                     """);
             // Verify that no data were persisted to the records table
-            assertThat(resultSet.next()).isFalse();
-            System.out.println("#### Verified no records committed ####");
+            assertThat(resultSet.next()).isEqualTo(isCommitted);
+            System.out.println("#### Verified committed records status ####");
+            System.out.printf("#### TransactionalProducer completed (isCommitted=%B) ####%n", isCommitted);
         }
     }
 

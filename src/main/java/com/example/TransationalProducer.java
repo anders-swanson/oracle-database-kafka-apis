@@ -48,17 +48,18 @@ public class TransationalProducer implements AutoCloseable {
             String record = records.next();
             int idx = i.getAndIncrement();
             if (idx >= limit) {
+                System.out.printf("Produced %d records\n", idx);
                 System.out.println("Unexpected error processing records. Aborting transaction!");
                 // Abort the database transaction on error, cancelling the effective batch
                 producer.abortTransaction();
                 return;
             }
 
-            System.out.println("Produced record: " + record);
             ProducerRecord<String, String> pr = new ProducerRecord<>(topic, Integer.toString(idx), record);
             producer.send(pr);
             persistRecord(record, idx, conn);
         }
+        System.out.printf("Produced %d records\n", i.get());
         // commit the transaction
         producer.commitTransaction();
     }
