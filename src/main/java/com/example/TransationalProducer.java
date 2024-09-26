@@ -45,7 +45,7 @@ public class TransationalProducer implements Runnable, AutoCloseable {
         producer.initTransactions();
         producer.beginTransaction();
         Connection conn = producer.getDBConnection();
-        AtomicInteger i = new AtomicInteger(0);
+        AtomicInteger i = new AtomicInteger(1);
         Iterator<String> records = inputs.iterator();
         while (records.hasNext()) {
             String record = records.next();
