@@ -17,32 +17,29 @@ import org.oracle.okafka.clients.producer.KafkaProducer;
  * After limit records have been produced, the TransactionalProducer simulates a processing error,
  * and aborts the current producer batch.
  */
-public class TransationalProducer implements Runnable, AutoCloseable {
+public class TransationalProducer implements AutoCloseable {
     private final String insertRecord = """
             insert into records (data, idx) values (?, ?)
             """;
 
     private final KafkaProducer<String, String> producer;
     private final String topic;
-    private final Stream<String> inputs;
 
     // Simulate an message processing error after limit messages have been produced
     private final int limit;
 
     public TransationalProducer(KafkaProducer<String, String> producer,
                                 String topic,
-                                Stream<String> inputs,
                                 int limit) {
         this.producer = producer;
         this.topic = topic;
-        this.inputs = inputs;
         this.limit = limit;
+        // Initialize transactional producer
+        this.producer.initTransactions();
     }
 
-    @Override
-    public void run() {
-        // initialize the producer and start a transaction
-        producer.initTransactions();
+    public void produce(Stream<String> inputs) {
+        // Being producer transaction
         producer.beginTransaction();
         Connection conn = producer.getDBConnection();
         AtomicInteger i = new AtomicInteger(1);

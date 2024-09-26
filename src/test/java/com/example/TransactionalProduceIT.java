@@ -83,17 +83,13 @@ public class TransactionalProduceIT {
         producerProps.put("oracle.transactional.producer", "true");
         KafkaProducer<String, String> okafkaProducer = new KafkaProducer<>(producerProps);
 
-        // Launch the TransactionalProducer asynchronously,
-        // and wait for thread completion.
+        // The producer will process 15 records before failing,
+        // aborting the transaction.
         try (TransationalProducer producer = new TransationalProducer(
                 okafkaProducer,
                 topicName,
-                getDataStream(),
-                15);
-             ExecutorService executor = Executors.newFixedThreadPool(1)) {
-            // The producer will process 15 records before failing,
-            // aborting the transaction.
-            executor.submit(producer).get();
+                15)) {
+            producer.produce(getDataStream());
         }
 
         System.out.println("#### TransactionalProducer completed ####");
