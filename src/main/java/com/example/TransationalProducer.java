@@ -4,7 +4,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Iterator;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -18,7 +17,7 @@ import org.oracle.okafka.clients.producer.KafkaProducer;
  * and aborts the current producer batch.
  */
 public class TransationalProducer implements AutoCloseable {
-    private final String insertRecord = """
+    private static final String insertRecord = """
             insert into records (data, idx) values (?, ?)
             """;
 
@@ -42,12 +41,11 @@ public class TransationalProducer implements AutoCloseable {
         // Being producer transaction
         producer.beginTransaction();
         Connection conn = producer.getDBConnection();
-        AtomicInteger i = new AtomicInteger(1);
+        int idx = 0;
         Iterator<String> records = inputs.iterator();
         while (records.hasNext()) {
             String record = records.next();
-            int idx = i.getAndIncrement();
-            if (idx >= limit) {
+            if (++idx >= limit) {
                 System.out.printf("Produced %d records\n", idx);
                 System.out.println("Unexpected error processing records. Aborting transaction!");
                 // Abort the database transaction on error, cancelling the effective batch
@@ -59,7 +57,7 @@ public class TransationalProducer implements AutoCloseable {
             producer.send(pr);
             persistRecord(record, idx, conn);
         }
-        System.out.printf("Produced %d records\n", i.get());
+        System.out.printf("Produced %d records\n", idx);
         // commit the transaction
         producer.commitTransaction();
     }

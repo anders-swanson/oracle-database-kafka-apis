@@ -1,5 +1,6 @@
 package com.example;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import org.apache.kafka.clients.producer.Producer;
@@ -18,10 +19,12 @@ public class SampleProducer<T> implements Runnable, AutoCloseable {
 
     @Override
     public void run() {
+        AtomicInteger i = new AtomicInteger();
         inputs.forEach(t -> {
-            System.out.println("Produced record: " + t);
+            i.incrementAndGet();
             producer.send(new ProducerRecord<>(topic, t));
         });
+        System.out.printf("Produced %d records\n", i.get());
     }
 
     @Override

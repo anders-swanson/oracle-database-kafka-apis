@@ -7,15 +7,17 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
+import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
 import oracle.jdbc.pool.OracleDataSource;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.producer.Producer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.oracle.okafka.clients.consumer.KafkaConsumer;
 import org.oracle.okafka.clients.producer.KafkaProducer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.oracle.OracleContainer;
@@ -23,7 +25,7 @@ import org.testcontainers.utility.MountableFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class TransactionalProduceIT {
+public class TransactionalConsumeIT {
     // Oracle Databse 23ai Free container image
     private static final String oracleImage = "gvenzl/oracle-free:23.5-slim-faststart";
     private static final String testUser = "testuser";
@@ -66,40 +68,41 @@ public class TransactionalProduceIT {
             .withPassword(testPassword);
 
     @Test
-    void transactionalProduce() throws Exception {
+    void transactionalConsume() throws Exception {
         // Create a topic to produce messages to, and consume messages from.
         // This topic will have 1 partition and a replication factor of 0,
         // since we are testing locally with a containerized database.
         NewTopic topic = new NewTopic(topicName, 1, (short) 0);
         AdminUtil.createTopicIfNotExists(getOKafkaConnectionProperties(), topic);
-        // The producer will fail, and rollback the transaction.
-        // No records will be written.
-        doTransactionalProduce(15, false);
-        // The producer will write 50 records, and commit the transaction.
-        // The records table will be populated.
-        doTransactionalProduce(51, true);
+        // Add records to the topic.
+        produceRecords();
+        // Consume records and simulate a crash. No records should be committed.
+        doTransactionalConsume(false);
+        // Consume records, without any crash. All records should be committed.
+        doTransactionalConsume(true);
     }
 
-    private void doTransactionalProduce(int limit, boolean isCommitted) throws Exception {
-        // Create the KafkaProducer with Oracle Database connectivity information.
-        Properties producerProps = getOKafkaConnectionProperties();
-        producerProps.put("enable.idempotence", "true");
-        producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+    private void doTransactionalConsume(boolean isCommitted) throws Exception {
+        // Create the Consumer.
+        Properties consumerProps = getOKafkaConnectionProperties();
+        consumerProps.put("group.id" , "MY_CONSUMER_GROUP");
+        consumerProps.put("enable.auto.commit","false");
+        consumerProps.put("max.poll.records", 2000);
+        consumerProps.put("auto.offset.reset", "earliest");
+        consumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        consumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        KafkaConsumer<String, String> okafkaConsumer = new KafkaConsumer<>(consumerProps);
 
-        // This property is required for transactional producers
-        producerProps.put("oracle.transactional.producer", "true");
-        KafkaProducer<String, String> okafkaProducer = new KafkaProducer<>(producerProps);
+        System.out.printf("#### Starting TransactionalConsumer (isCommitted=%B) ####%n", isCommitted);
 
-        System.out.printf("#### Starting TransactionalProducer (isCommitted=%B) ####%n", isCommitted);
-
-        // The producer will process 15 records before failing,
-        // aborting the transaction.
-        try (TransationalProducer producer = new TransationalProducer(
-                okafkaProducer,
-                topicName,
-                limit)) {
-            producer.produce(getDataStream());
+        // Run the TransactionalConsumer
+        try (TransactionalConsumer consumer = new TransactionalConsumer(
+                okafkaConsumer,
+                List.of(topicName),
+                50,
+                isCommitted
+        )) {
+            consumer.run();
         }
 
         // Query the database, and verify the records table
@@ -110,7 +113,19 @@ public class TransactionalProduceIT {
                     """);
             assertThat(resultSet.next()).isEqualTo(isCommitted);
             System.out.println("#### Verified committed records status ####");
-            System.out.printf("#### TransactionalProducer completed (isCommitted=%B) ####%n", isCommitted);
+            System.out.printf("#### TransactionalConsumer completed (isCommitted=%B) ####%n", isCommitted);
+        }
+    }
+
+    private void produceRecords() throws Exception {
+        Properties producerProps = getOKafkaConnectionProperties();
+        producerProps.put("enable.idempotence", "true");
+        producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        Producer<String, String> okafkaProducer = new KafkaProducer<>(producerProps);
+
+        try (SampleProducer<String> sampleProducer = new SampleProducer<>(okafkaProducer, topicName, getDataStream())) {
+            sampleProducer.run();
         }
     }
 
